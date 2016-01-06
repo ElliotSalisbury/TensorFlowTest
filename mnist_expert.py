@@ -1,7 +1,8 @@
-from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
 import pickle
 import random
+import numpy as np
+import cv2
 
 #download dataset
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
@@ -125,34 +126,41 @@ for i in range(20000):
 
 print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
 
+def img2data(img):
+  data = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+  data = data.astype(np.float32) / 255.0
+  data = data.flatten()
+
+  return data
+
 windowSize = 28
-  videoPath = ""
-  capture = cv2.VideoCapture(videoPath)
+videoPath = ""
+capture = cv2.VideoCapture(videoPath)
 
-  ret, frame = capture.read()
-  while ret:
-      height,width,depth = frame.shape
+ret, frame = capture.read()
+while ret:
+    height,width,depth = frame.shape
 
-      maskHeight = height-windowSize
-      maskWidth = width-windowSize
+    maskHeight = height-windowSize
+    maskWidth = width-windowSize
 
 
 
-      data = []
-      for x in range(0,maskWidth):
-          for y in range(0,maskHeight):
-              window = frame[y:y+windowSize,x:x+windowSize]
-              data.append(img2data(window))
+    data = []
+    for x in range(0,maskWidth):
+        for y in range(0,maskHeight):
+            window = frame[y:y+windowSize,x:x+windowSize]
+            data.append(img2data(window))
 
-      results = []
+    results = []
 
-      mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
-      for i, result in enumerate(results):
-          y = i % maskHeight
-          x = i / maskHeight
+    mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
+    for i, result in enumerate(results):
+        y = i % maskHeight
+        x = i / maskHeight
 
-          mask[y,x] = result[1]
+        mask[y,x] = result[1]
 
-      cv2.imwrite("mask/frame_%06d.jpg",mask)
+    cv2.imwrite("mask/frame_%06d.jpg",mask)
 
-      ret, frame = capture.read()
+    ret, frame = capture.read()
