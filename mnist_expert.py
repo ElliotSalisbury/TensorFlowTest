@@ -1,18 +1,41 @@
 from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
+import pickle
+import random
 
 #download dataset
-mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
+# mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
+
+with open("objs.pickle", "rb") as f:
+  importedData = pickle.load(f)
+def getTrainingData():
+  Xs = importedData["trainingX"]
+  Ys = importedData["trainingY"]
+  return Xs, Ys
+
+def getTrainingBatch(size):
+  xs, ys = getTrainingData()
+  indexs = range(0,len(xs))
+  batch = random.sample(indexs,size)
+
+  batch_xs = [xs[i] for i in batch]
+  batch_ys = [ys[i] for i in batch]
+  return batch_xs, batch_ys
+
+def getTestData():
+  Xs = importedData["testX"]
+  Ys = importedData["testY"]
+  return Xs, Ys
 
 
 sess = tf.InteractiveSession()
 
 
 x = tf.placeholder("float", shape=[None, 784])
-y_ = tf.placeholder("float", shape=[None, 10])
+y_ = tf.placeholder("float", shape=[None, 2])
 
-W = tf.Variable(tf.zeros([784,10]))
-b = tf.Variable(tf.zeros([10]))
+W = tf.Variable(tf.zeros([784,2]))
+b = tf.Variable(tf.zeros([2]))
 
 sess.run(tf.initialize_all_variables())
 
@@ -22,12 +45,14 @@ cross_entropy = -tf.reduce_sum(y_*tf.log(y))
 train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
 for i in range(1000):
-  batch_xs, batch_ys = mnist.train.next_batch(50)
+  batch_xs, batch_ys = getTrainingBatch(50)
   train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
 
 correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-print(accuracy.eval(feed_dict={x: mnist.test.images, y_: mnist.test.labels}))
+
+test_xs, test_ys = getTestData()
+print(accuracy.eval(feed_dict={x: test_xs, y_: test_ys}))
 
 ### Multilayer Convolutional Network
 
@@ -77,8 +102,8 @@ keep_prob = tf.placeholder("float")
 h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
 #add softmax layer to convert the 1024 into just 10 outputs
-W_fc2 = weight_variable([1024, 10])
-b_fc2 = bias_variable([10])
+W_fc2 = weight_variable([1024, 2])
+b_fc2 = bias_variable([2])
 
 y_conv=tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
@@ -93,9 +118,9 @@ sess = tf.Session()
 sess.run(init)
 
 for i in range(20000):
-  batch = mnist.train.next_batch(50)
+  batch = getTrainingBatch(50)
   if i%100 == 0:
     print("step %d, training accuracy %g"%(i,sess.run(accuracy, feed_dict={x:batch[0], y_: batch[1], keep_prob: 1.0})))
   sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
 
-print("test accuracy %g"%sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels, keep_prob: 1.0}))
+print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
