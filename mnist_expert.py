@@ -134,33 +134,38 @@ def img2data(img):
   return data
 
 windowSize = 28
-videoPath = ""
+videoPath = "vanuatu35.mp4"
 capture = cv2.VideoCapture(videoPath)
 
 ret, frame = capture.read()
+frameId = 0
 while ret:
-    height,width,depth = frame.shape
+  frame = cv2.resize(frame, (640,360))
+  height,width,depth = frame.shape
 
-    maskHeight = height-windowSize
-    maskWidth = width-windowSize
+  maskHeight = height-windowSize
+  maskWidth = width-windowSize
 
+  data = []
+  for x in range(0,maskWidth):
+      for y in range(0,maskHeight):
+        window = frame[y:y+windowSize,x:x+windowSize]
+        data.append(img2data(window))
 
+  results = []
 
-    data = []
-    for x in range(0,maskWidth):
-        for y in range(0,maskHeight):
-            window = frame[y:y+windowSize,x:x+windowSize]
-            data.append(img2data(window))
+  mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
+  for i, result in enumerate(results):
+      y = i % maskHeight
+      x = i / maskHeight
 
-    results = []
+      mask[y,x] = result[1]
 
-    mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
-    for i, result in enumerate(results):
-        y = i % maskHeight
-        x = i / maskHeight
+  with open('maskFrames/%06d.pickle'%frameId, 'wb') as f:
+    pickle.dump(mask, f)
 
-        mask[y,x] = result[1]
+  outMask = cv2.cvtColor((mask * 255).astype(np.uint8),cv2.COLOR_GRAY2BGR)
+  cv2.imwrite("maskFrames/frame_%06d.jpg",outMask)
 
-    cv2.imwrite("mask/frame_%06d.jpg",mask)
-
-    ret, frame = capture.read()
+  ret, frame = capture.read()
+  frameId += 1
