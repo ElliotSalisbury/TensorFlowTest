@@ -124,3 +124,35 @@ for i in range(20000):
   sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
 
 print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
+
+windowSize = 28
+  videoPath = ""
+  capture = cv2.VideoCapture(videoPath)
+
+  ret, frame = capture.read()
+  while ret:
+      height,width,depth = frame.shape
+
+      maskHeight = height-windowSize
+      maskWidth = width-windowSize
+
+
+
+      data = []
+      for x in range(0,maskWidth):
+          for y in range(0,maskHeight):
+              window = frame[y:y+windowSize,x:x+windowSize]
+              data.append(img2data(window))
+
+      results = []
+
+      mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
+      for i, result in enumerate(results):
+          y = i % maskHeight
+          x = i / maskHeight
+
+          mask[y,x] = result[1]
+
+      cv2.imwrite("mask/frame_%06d.jpg",mask)
+
+      ret, frame = capture.read()
