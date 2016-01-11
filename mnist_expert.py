@@ -9,14 +9,15 @@ import cv2
 
 with open("objs.pickle", "rb") as f:
   importedData = pickle.load(f)
+
 def getTrainingData():
   Xs = importedData["trainingX"]
   Ys = importedData["trainingY"]
   return Xs, Ys
 
+xs, ys = getTrainingData()
+indexs = range(0,len(xs))
 def getTrainingBatch(size):
-  xs, ys = getTrainingData()
-  indexs = range(0,len(xs))
   batch = random.sample(indexs,size)
 
   batch_xs = [xs[i] for i in batch]
@@ -27,35 +28,6 @@ def getTestData():
   Xs = importedData["testX"]
   Ys = importedData["testY"]
   return Xs, Ys
-
-
-sess = tf.InteractiveSession()
-
-
-x = tf.placeholder("float", shape=[None, 784])
-y_ = tf.placeholder("float", shape=[None, 2])
-
-W = tf.Variable(tf.zeros([784,2]))
-b = tf.Variable(tf.zeros([2]))
-
-sess.run(tf.initialize_all_variables())
-
-y = tf.nn.softmax(tf.matmul(x,W) + b)
-cross_entropy = -tf.reduce_sum(y_*tf.log(y))
-
-train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
-
-for i in range(1000):
-  batch_xs, batch_ys = getTrainingBatch(50)
-  train_step.run(feed_dict={x: batch_xs, y_: batch_ys})
-
-correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-
-test_xs, test_ys = getTestData()
-print(accuracy.eval(feed_dict={x: test_xs, y_: test_ys}))
-
-### Multilayer Convolutional Network
 
 #define helper functions
 def weight_variable(shape):
@@ -72,6 +44,11 @@ def conv2d(x, W):
 def max_pool_2x2(x):
   return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1], padding='SAME')
+
+### Multilayer Convolutional Network
+
+x = tf.placeholder(tf.float32, [None, 784])
+y_ = tf.placeholder(tf.float32, [None, 2])
 
 # reshape x back into a 2d image
 x_image = tf.reshape(x, [-1,28,28,1])
@@ -114,17 +91,21 @@ train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 correct_prediction = tf.equal(tf.argmax(y_conv,1), tf.argmax(y_,1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
-init = tf.initialize_all_variables()
-sess = tf.Session()
-sess.run(init)
+def trainSession():
+  init = tf.initialize_all_variables()
+  sess = tf.Session()
+  sess.run(init)
 
-for i in range(20000):
-  batch = getTrainingBatch(50)
-  if i%100 == 0:
-    print("step %d, training accuracy %g"%(i,sess.run(accuracy, feed_dict={x:batch[0], y_: batch[1], keep_prob: 1.0})))
-  sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+  for i in range(10000):
+    batch = getTrainingBatch(50)
+    if i%100 == 0:
+      print("step %d, training accuracy %g"%(i,sess.run(accuracy, feed_dict={x:batch[0], y_: batch[1], keep_prob: 1.0})))
+    sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
 
-print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
+  test_xs, test_ys = getTestData()
+  print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
+
+  return sess
 
 def img2data(img):
   data = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
@@ -133,6 +114,7 @@ def img2data(img):
 
   return data
 
+sess = trainSession()
 windowSize = 28
 videoPath = "vanuatu35.mp4"
 capture = cv2.VideoCapture(videoPath)
@@ -143,29 +125,37 @@ while ret:
   frame = cv2.resize(frame, (640,360))
   height,width,depth = frame.shape
 
-  maskHeight = height-windowSize
-  maskWidth = width-windowSize
+  downscale = 10
+  maskHeight = int((height-windowSize)/downscale)
+  maskWidth = int((width-windowSize)/downscale)
 
   data = []
-  for x in range(0,maskWidth):
-      for y in range(0,maskHeight):
-        window = frame[y:y+windowSize,x:x+windowSize]
+  for i in range(0,maskWidth):
+      for j in range(0,maskHeight):
+        xPos = i*downscale
+        yPos = j*downscale
+
+        window = frame[yPos:yPos+windowSize,xPos:xPos+windowSize]
         data.append(img2data(window))
 
-  results = []
+  print("About to run classifier...")
+  results = sess.run(y_conv, feed_dict={x: data, keep_prob: 1.0})
 
   mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
   for i, result in enumerate(results):
-      y = i % maskHeight
-      x = i / maskHeight
+      a = i % maskHeight
+      b = i / maskHeight
 
-      mask[y,x] = result[1]
+      mask[a,b] = result[1]
 
+  print("Mask created, saving...")
   with open('maskFrames/%06d.pickle'%frameId, 'wb') as f:
     pickle.dump(mask, f)
 
   outMask = cv2.cvtColor((mask * 255).astype(np.uint8),cv2.COLOR_GRAY2BGR)
-  cv2.imwrite("maskFrames/frame_%06d.jpg",outMask)
+  cv2.imwrite("maskFrames/frame_%06d.jpg"%frameId,outMask)
+
+  print("Completed frame_%06d.jpg"%frameId)
 
   ret, frame = capture.read()
   frameId += 1
