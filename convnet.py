@@ -4,26 +4,26 @@ import random
 import numpy as np
 import cv2
 
-with open("objs.pickle", "rb") as f:
-  importedData = pickle.load(f)
-def getTrainingData():
-  Xs = importedData["trainingX"]
-  Ys = importedData["trainingY"]
-  return Xs, Ys
-
-def getTrainingBatch(size):
-  xs, ys = getTrainingData()
-  indexs = range(0,len(xs))
-  batch = random.sample(indexs,size)
-
-  batch_xs = [xs[i] for i in batch]
-  batch_ys = [ys[i] for i in batch]
-  return batch_xs, batch_ys
-
-def getTestData():
-  Xs = importedData["testX"]
-  Ys = importedData["testY"]
-  return Xs, Ys
+# with open("objs.pickle", "rb") as f:
+#   importedData = pickle.load(f)
+# def getTrainingData():
+#   Xs = importedData["trainingX"]
+#   Ys = importedData["trainingY"]
+#   return Xs, Ys
+#
+# def getTrainingBatch(size):
+#   xs, ys = getTrainingData()
+#   indexs = range(0,len(xs))
+#   batch = random.sample(indexs,size)
+#
+#   batch_xs = [xs[i] for i in batch]
+#   batch_ys = [ys[i] for i in batch]
+#   return batch_xs, batch_ys
+#
+# def getTestData():
+#   Xs = importedData["testX"]
+#   Ys = importedData["testY"]
+#   return Xs, Ys
 
 ### Multilayer Convolutional Network
 
@@ -91,24 +91,17 @@ sess.run(init)
 
 saver = tf.train.Saver()
 
-# saver.restore(sess, "saves/model_017000.ckpt")
+saver.restore(sess, "saves/model_013100.ckpt")
 
-for i in range(20000):
-  batch = getTrainingBatch(50)
-  if i%100 == 0:
-    print("step %d, training accuracy %g"%(i,sess.run(accuracy, feed_dict={x:batch[0], y_: batch[1], keep_prob: 1.0})))
-    save_path = saver.save(sess, "saves/model_%06d.ckpt"%i)
-  sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+# for i in range(20000):
+#   batch = getTrainingBatch(50)
+#   if i%100 == 0:
+#     print("step %d, training accuracy %g"%(i,sess.run(accuracy, feed_dict={x:batch[0], y_: batch[1], keep_prob: 1.0})))
+#     save_path = saver.save(sess, "saves/model_%06d.ckpt"%i)
+#   sess.run(train_step, feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
 
-test_xs, test_ys = getTestData()
-print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
-
-def img2data(img):
-  data = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-
-  data = data.flatten()
-
-  return data
+# test_xs, test_ys = getTestData()
+# print("test accuracy %g"%sess.run(accuracy, feed_dict={x: test_xs, y_: test_ys, keep_prob: 1.0}))
 
 windowSize = 28
 videoPath = "vanuatu35.mp4"
@@ -117,8 +110,8 @@ capture = cv2.VideoCapture(videoPath)
 frameSize = (640,360)
 minFrameSize = (64,36)
 numOfSizes = 10
-frameWidths = range(minFrameSize[0],frameSize[0]+1,frameSize[0]/numOfSizes)
-frameHeights = range(minFrameSize[1],frameSize[1]+1,frameSize[1]/numOfSizes)
+frameWidths = list(reversed(range(minFrameSize[0],frameSize[0]+1,frameSize[0]/numOfSizes)))
+frameHeights = list(reversed(range(minFrameSize[1],frameSize[1]+1,frameSize[1]/numOfSizes)))
 
 IndexsPerSize = []
 for i in range(numOfSizes):
@@ -126,13 +119,13 @@ for i in range(numOfSizes):
   fHeight = frameHeights[i]
 
   fxvs, fyvs = [],[]
-  for x in range(0,fWidth-windowSize,windowSize/2):
-    for y in range(0,fHeight-windowSize,windowSize/2):
-      xv,yv = np.meshgrid(range(x,x+windowSize),range(y,y+windowSize))
+  for i in range(0,fWidth-windowSize,windowSize/2):
+    for j in range(0,fHeight-windowSize,windowSize/2):
+      xv,yv = np.meshgrid(range(i,i+windowSize),range(j,j+windowSize))
       fxvs.append(xv)
       fyvs.append(yv)
 
-  IndexsPerSize.append(fxvs,fyvs)
+  IndexsPerSize.append((fxvs,fyvs))
 
 ret, frame = capture.read()
 frameId = 0
@@ -143,37 +136,17 @@ while ret:
 
   resultsPerSize = []
   for i in range(numOfSizes):
+    # print("%s,%s"%((frameWidths[i],frameHeights[i])))
     smallFrame = cv2.resize(frame, (frameWidths[i],frameHeights[i]))
     indexs = IndexsPerSize[i]
-    samples = smallFrame[indexs]
+    samples = smallFrame[indexs[1],indexs[0]]
+    # print(np.array(samples).shape)
 
     results = sess.run(y_conv, feed_dict={x: samples, keep_prob: 1.0})
     resultsPerSize.append(results)
 
+  with open('resultsPerSize/%06d.pickle'%frameId, 'wb') as f:
+    pickle.dump(resultsPerSize, f)
+
   ret, frame = capture.read()
   frameId += 1
-
-#   maskHeight = height-windowSize
-#   maskWidth = width-windowSize
-#
-#   data = []
-#   for x in range(0,maskWidth):
-#       for y in range(0,maskHeight):
-#         window = frame[y:y+windowSize,x:x+windowSize]
-#         data.append(img2data(window))
-#
-#   results = []
-#
-#   mask = np.zeros((maskHeight,maskWidth),dtype=np.float64)
-#   for i, result in enumerate(results):
-#       y = i % maskHeight
-#       x = i / maskHeight
-#
-#       mask[y,x] = result[1]
-#
-#   with open('maskFrames/%06d.pickle'%frameId, 'wb') as f:
-#     pickle.dump(mask, f)
-#
-#   outMask = cv2.cvtColor((mask * 255).astype(np.uint8),cv2.COLOR_GRAY2BGR)
-#   cv2.imwrite("maskFrames/frame_%06d.jpg",outMask)
-#
